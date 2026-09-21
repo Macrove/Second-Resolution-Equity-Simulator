@@ -3,6 +3,8 @@
       name: US,
       id: 0,
       localTimezone: US/NewYork,
+      UTC2LocalOffsetHours: -5,
+      UTC2LocalDSTOffsetHours: -4,
       LocalStartTimes: [ 09:30 ],
       LocalEndTimes: [ 16:00 ],
       NStocks: 1000,
@@ -14,6 +16,8 @@
       name: Europe,
       id: 1,
       localTimezone: Berlin,
+      UTC2LocalOffsetHours: 1,
+      UTC2LocalDSTOffsetHours: 2,
       LocalStartTimes: [ 09:00 ],
       LocalEndTimes: [ 17:30 ],
       NStocks: 500,
@@ -24,6 +28,8 @@
       name: Asia(Japan),
       id: 2,
       localTimezone: Tokyo,
+      UTC2LocalOffsetHours: 9,
+      UTC2LocalDSTOffsetHours: 9,
       LocalStartTimes: [ 09:00, 12:30 ],
       LocalEndTimes: [ 11:30, 15:00 ],
       NStocks: 500,
@@ -40,4 +46,6 @@
 - AnnualVolatilityUniformPct: [15, 60]
 - BaseVolumeUniform: [50, 2000]
 - RegionIsRevertorProbabilityPct: 30
+- HalfLifeSecsUniform: [300, 1200]
+- OULongRunStdUniformPct: [0.05, 0.15]
 - PerSecondVolatilityDenominatorSquared: 5896800 # 252*23400

@@ -1,0 +1,81 @@
+ASSUMPTIONS AND INTERPRETATIONS
+===============================
+
+Places where the assignment text is ambiguous, or where the code is more
+general than the text. Numbers are the same as the spec unless stated.
+
+1. Jump across the Tokyo lunch
+   Spec: "across the Tokyo lunch with per-second volatility x sqrt(3,600)".
+   Code: per-second volatility x sqrt(start of next session - end of previous
+   session), in seconds, taken from the config.
+   For Tokyo that is 12:30 - 11:30 = 3,600 s, so the value is identical to the
+   spec. The difference is only that 3,600 is not hardcoded, so the rule works
+   for any region with several sessions.
+
+2. Overnight jump
+   Spec: "overnight with standard deviation annual volatility / sqrt(252) x 0.5".
+   Code: same formula; 252 and 0.5 are named constants (kTradingDaysPerYear,
+   kOvernightJumpFactor). No numeric deviation.
+   - One overnight jump is applied at the first segment of each trading day
+     that follows a previous traded day, whatever the calendar gap. A weekend or
+     holiday gives one jump, not one per missing day.
+   - There is no jump before the very first segment generated; the walk starts
+     at the drawn start price. Consequence: generating a sub-range (e.g. only
+     2025-03-31) gives a different path from the same day in a full run.
+
+3. Per-second volatility
+   annual vol / sqrt(252 x 23,400), with the denominator read from the config
+   (PerSecondVolatilityDenominatorSquared = 5,896,800). Same in all regions,
+   including Europe (30,600 s days) and Japan (18,000 s days), as in the spec.
+
+4. Segment timing
+   Sessions are half-open [start, end) in local time, so a US day has exactly
+   23,400 seconds (09:30:00 .. 15:59:59), Europe 30,600, each Tokyo segment
+   9,000. u (fraction of segment elapsed) = i / segment_length for the i-th
+   second, i = 0..length-1.
+
+5. Dropped seconds
+   Each second is dropped independently with probability 0.5%. The price
+   process (walk and OU state) advances on every second, dropped or not; only
+   the record is omitted. A dropped second therefore does not change later
+   prices.
+
+6. Reverters
+   "30% chance per region of being a reverter" is read as: each instrument is a
+   reverter with probability 0.30, drawn once. Half-life, long-run std and
+   reverter flag are all drawn once per instrument (half-life and std are drawn
+   for every instrument, but used only by reverters, to keep the per-instrument
+   stream layout fixed).
+   The OU component is reset to 0 at the start of every segment (each US day,
+   each European day, each Tokyo morning and afternoon).
+   Reverter IDs go to <out>/reverters.txt (the spec's name), one per line,
+   ascending.
+
+7. Randomness and determinism
+   Each instrument has its own RNG seeded from (global seed, security id).
+   Output therefore depends only on the seed; it does not depend on the order
+   instruments are processed or on IO timing. Same seed => identical files on
+   the same platform/standard library. (std::normal_distribution and
+   std::poisson_distribution are not specified bit-for-bit across standard
+   libraries, so files can differ between e.g. libc++ and libstdc++.)
+
+8. Time zones and DST
+   Offsets are in region.yaml (UTC2LocalOffsetHours, UTC2LocalDSTOffsetHours).
+   DST applies from 00:00 local on DSTRangeStart. The DST end date is ignored
+   because it falls outside the period. Trading hours are well away from the
+   02:00 changeover, so date-level switching is exact for every timestamp.
+   Files are placed in the directory of the local trading date; for all three
+   regions this equals the UTC date of every record.
+
+9. Weekends and holidays
+   Every non-trading day (weekend, holiday) in the requested range produces an
+   empty (0-byte) file for every instrument, rather than a missing file.
+
+10. Price and volume types
+   Price is stored as float32 (exp of log price, rounded), volume as int32
+   (Poisson draw, floored at 1 since a trade with zero volume is meaningless).
+   The floor almost never binds: the smallest possible mean is 50 x 0.5 = 25,
+   where P(0) is about 1e-11. Records are 16 bytes, little-endian, no padding.
+
+11. - Faster option. If you want it faster, the lever is running stocks in parallel. The per-instrument seeding already makes that deterministic. I haven't done it.
+
