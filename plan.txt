@@ -1,0 +1,19 @@
+data generator - 2.5hrs
+storage layer - 2.5hrs
+simulator - strategy runner on book snapshot - 3h
+mean reversion strategy engine - 4h
+dashboard - 1.5h
+strategy run - 3h
+slides/readme - 2h
+
+
+
+// region yaml file
+- session: start_time, end_time
+- region: region_id(0-2), region_name("US", "Japan", "Europe"), local_timezone_string, loc2utcOffset, dstloc2utcOffset, vector<session> dst_session, vector<session> session, nstocks
+func isDSTTradedate(rundate) -> bool
+
+- instrument: security_id(0-1999), region_id(0-2)
+
+// period file
+- Period - defauututclt start date, default end date, 

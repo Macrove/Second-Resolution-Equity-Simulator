@@ -1,0 +1,43 @@
+- Region:
+  - {
+      name: US,
+      id: 0,
+      localTimezone: US/NewYork,
+      LocalStartTimes: [ 09:30 ],
+      LocalEndTimes: [ 16:00 ],
+      NStocks: 1000,
+      TradeDayOfWeek: [1, 2, 3, 4, 5],
+      DSTRangeStart: [2025.03.09],
+      Holidays: [2025.01.09, 2025.01.20, 2025.02.17]
+    }
+  - {
+      name: Europe,
+      id: 1,
+      localTimezone: Berlin,
+      LocalStartTimes: [ 09:00 ],
+      LocalEndTimes: [ 17:30 ],
+      NStocks: 500,
+      TradeDayOfWeek: [1, 2, 3, 4, 5],
+      DSTRangeStart: [2025.03.30],
+    }
+  - {
+      name: Asia(Japan),
+      id: 2,
+      localTimezone: Tokyo,
+      LocalStartTimes: [ 09:00, 12:30 ],
+      LocalEndTimes: [ 11:30, 15:00 ],
+      NStocks: 500,
+      TradeDayOfWeek: [1, 2, 3, 4, 5],
+      Holidays: [2025.01.13, 2025.02.11, 2025.02.24, 2025.03.20]
+    }
+
+- DefaultStartDate: 2025-01-02
+- DefaultEndDate: 2025-03-31
+
+
+- TradeSecondDropProbabilityPct: 0.5
+- StartPriceUniform: [10, 500]
+- AnnualVolatilityUniformPct: [15, 60]
+- BaseVolumeUniform: [50, 2000]
+- RegionIsRevertorProbabilityPct: 30
+- PerSecondVolatilityDenominatorSquared: 5896800 # 252*23400
