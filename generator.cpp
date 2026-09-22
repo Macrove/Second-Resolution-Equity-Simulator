@@ -25,19 +25,13 @@
 #include <vector>
 
 #include "config.h"
+#include "store_format.h"
 
 namespace {
 
 using namespace sim;
 
 static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "records are little-endian on disk");
-
-struct Record {
-    int64_t timestampNs;
-    float price;
-    int32_t volume;
-};
-static_assert(sizeof(Record) == 16, "record must be 16 bytes");
 
 constexpr double kTradingDaysPerYear = 252;
 constexpr double kOvernightJumpFactor = 0.5;
