@@ -2,3 +2,8 @@ build/
 out/
 plan.txt
 gen
+store/
+bench/data/
+runs.jsonl
+ingest
+sim

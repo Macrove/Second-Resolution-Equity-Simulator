@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sim runs</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1f24; --muted:#6b7280; --line:#e5e7eb; --head:#f3f4f6; --pos:#0a7d33; --neg:#b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111418; --fg:#e6e8eb; --muted:#9aa3ad; --line:#2a2f36; --head:#1b2026; --pos:#4cc37a; --neg:#f28b82; } }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.4 -apple-system, system-ui, sans-serif; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  #status { color:var(--muted); margin-bottom:12px; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:var(--head); font-weight:600; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.run { cursor:pointer; }
+  tr.run:hover { background:var(--head); }
+  tr.detail td { background:var(--head); }
+  .params { color:var(--muted); font-size:12px; word-break:break-word; }
+  .pos { color:var(--pos); } .neg { color:var(--neg); }
+  table.inner { width:auto; } table.inner td, table.inner th { border:0; padding:2px 14px 2px 0; background:none; }
+  .wrap { overflow-x:auto; }
+</style>
+</head>
+<body>
+<h1>Simulation runs</h1>
+<div id="status">loading…</div>
+<div class="wrap"><table>
+  <thead><tr><th>Finished (UTC)</th><th>Command</th><th>Parameters</th><th class="num">Wall time</th><th class="num">Peak memory</th><th>Result</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table></div>
+<script>
+const open = new Set();
+let lastText = null;
+
+function fmtSecs(s) { return s >= 60 ? Math.floor(s / 60) + "m " + (s % 60).toFixed(1) + "s" : s.toFixed(2) + "s"; }
+function fmtMem(b) { return b >= 2**30 ? (b / 2**30).toFixed(2) + " GiB" : (b / 2**20).toFixed(0) + " MiB"; }
+function fmtNum(x, d) { return x == null ? "n/a" : x.toLocaleString(undefined, { maximumFractionDigits: d }); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function resultText(r) {
+  if (r.command === "strategy") return fmtNum(r.trades, 0) + " trades";
+  if (r.command === "snapshot") return "median " + fmtNum(r.median_us / 1000, 2) + " ms, p99 " + fmtNum(r.p99_us / 1000, 2) + " ms";
+  if (r.command === "trades") return fmtNum(r.trades, 0) + " positions, " + fmtNum(r.unresolved, 0) + " unresolved";
+  return "";
+}
+
+function summaryTable(r) {
+  if (!r.summary) return "";
+  const rows = r.summary.map(s => "<tr><td>" + esc(s.region) + "</td><td>" + (s.reverter ? "reverter" : "other") + "</td><td class='num'>" +
+    fmtNum(s.trades, 0) + "</td><td class='num " + (s.total_pnl >= 0 ? "pos" : "neg") + "'>" + fmtNum(s.total_pnl, 0) +
+    "</td><td class='num'>" + (s.sharpe == null ? "n/a" : s.sharpe.toFixed(2)) + "</td></tr>").join("");
+  return "<table class='inner'><tr><th>Region</th><th>Group</th><th class='num'>Trades</th><th class='num'>Total PnL</th><th class='num'>Sharpe</th></tr>" + rows + "</table>";
+}
+
+function render(text) {
+  const runs = text.split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean).reverse();
+  const tbody = document.getElementById("rows");
+  tbody.innerHTML = runs.map(r => {
+    const key = r.time + r.command + r.wall_seconds;
+    const params = Object.entries(r.params || {}).filter(([k]) => !["store", "in", "out", "summary", "reverters"].includes(k))
+      .map(([k, v]) => k + "=" + v).join("  ");
+    const main = "<tr class='run' data-key='" + esc(key) + "'><td>" + esc(r.time) + "</td><td>" + esc(r.command) + "</td><td class='params'>" + esc(params) +
+      "</td><td class='num'>" + fmtSecs(r.wall_seconds) + "</td><td class='num'>" + fmtMem(r.peak_rss_bytes) + "</td><td>" + esc(resultText(r)) + "</td></tr>";
+    const detail = r.summary && open.has(key) ? "<tr class='detail'><td colspan='6'>" + summaryTable(r) + "</td></tr>" : "";
+    return main + detail;
+  }).join("");
+  document.getElementById("status").textContent = runs.length + " runs · click a strategy run for its summary · updated " + new Date().toLocaleTimeString();
+  window.__runs = runs;
+}
+
+document.getElementById("rows").addEventListener("click", e => {
+  const tr = e.target.closest("tr.run");
+  if (!tr) return;
+  const key = tr.dataset.key;
+  open.has(key) ? open.delete(key) : open.add(key);
+  render(lastText);
+});
+
+async function poll() {
+  try {
+    const res = await fetch("/runs.jsonl", { cache: "no-store" });
+    const text = await res.text();
+    if (text !== lastText) { lastText = text; render(text); }
+    else document.getElementById("status").textContent = document.getElementById("status").textContent.replace(/updated .*/, "updated " + new Date().toLocaleTimeString());
+  } catch (e) { document.getElementById("status").textContent = "cannot reach server: " + e; }
+}
+poll(); setInterval(poll, 2000);
+</script>
+</body>
+</html>

@@ -30,7 +30,35 @@ target_link_libraries(gen PRIVATE simconfig)
 find_package(Threads REQUIRED)
 target_link_libraries(gen PRIVATE Threads::Threads)
 
+add_executable(ingest ingest.cpp)
+target_link_libraries(ingest PRIVATE simconfig Threads::Threads)
+
+add_library(simcore STATIC trades.cpp snapshot.cpp strategy.cpp)
+target_include_directories(simcore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(simcore PUBLIC Threads::Threads)
+
+add_executable(sim sim_main.cpp)
+target_link_libraries(sim PRIVATE simcore)
+
 enable_testing()
+add_executable(test_ingest test_ingest.cpp)
+target_compile_definitions(test_ingest PRIVATE
+  GEN_BIN="$<TARGET_FILE:gen>"
+  INGEST_BIN="$<TARGET_FILE:ingest>"
+  CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/region.yaml"
+  TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/test_tmp")
+add_test(NAME ingest COMMAND test_ingest)
+
+add_executable(test_sim test_sim.cpp)
+target_link_libraries(test_sim PRIVATE simcore)
+target_compile_definitions(test_sim PRIVATE
+  GEN_BIN="$<TARGET_FILE:gen>"
+  INGEST_BIN="$<TARGET_FILE:ingest>"
+  SIM_BIN="$<TARGET_FILE:sim>"
+  CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/region.yaml"
+  TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/test_tmp")
+add_test(NAME sim COMMAND test_sim)
+
 add_executable(test_generator test_generator.cpp)
 target_link_libraries(test_generator PRIVATE simconfig)
 target_compile_definitions(test_generator PRIVATE
