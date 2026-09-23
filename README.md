@@ -3,19 +3,39 @@
 Generator, storage layer, simulator and dashboard for one quarter of one-second prices
 (2,000 instruments: 1,000 US, 500 Europe, 500 Japan; about 2.88 billion points).
 
+## Build
+
 ```
 ./build.sh test                       # build gen, ingest, sim into this directory and run the tests
-./gen --out raw/ --seed 20250101 --start 2025-01-02 --end 2025-03-31
-./ingest --raw raw/ --store store/
-./sim trades   --store store/ --in trades.csv --out results.csv
-./sim snapshot --store store/ --in timestamps.txt --out snapshots.bin
+./build.sh                            # build only
+```
+
+## Run
+
+```
+# 1. Generate raw data (shorten --start/--end for a quick check; full quarter for real numbers)
+./gen --out raw/ --seed 20250101 --start 2025-01-02 --end 2025-03-31 --config region.yaml
+
+# 2. Ingest raw/ into an instrument-major store
+./ingest --raw raw/ --store store/ --config region.yaml --stride 256 --threads 12
+
+# 3. Sample trades.csv / timestamps.txt to exercise sim trades/snapshot without hand-writing input
+python3 bench/make_inputs.py --out data/ --trades 1000000 --snapshots 10000 --instruments 2000 --seed 20250101
+
+# 4. Run the simulator
+./sim trades   --store store/ --in data/trades.csv     --out results/results.csv --threads 12 --mae blocks
+./sim snapshot --store store/ --in data/timestamps.txt --out results/snapshot.bin --threads 12 --warm-index 1
 ./sim strategy --store store/ --reverters raw/reverters.txt --window 1800 --entry 2.0 --exit 0.0 \
-               --max-hold 3600 --out strategy_trades.csv --summary summary.csv
-python3 dashboard/serve.py            # http://127.0.0.1:8000, updates itself as runs finish
+               --max-hold 3600 --out strategy_out/trades.csv --summary strategy_out/summary.csv --threads 12
+
+# 5. Dashboard — polls runs.jsonl and updates itself as runs finish
+python3 dashboard/serve.py --log runs.jsonl --port 8000   # http://127.0.0.1:8000
 ```
 
 Every `sim` run appends one JSON line (parameters, wall time, peak RSS, result) to
-`runs.jsonl` (`--runlog FILE|none`); the dashboard polls that file.
+`runs.jsonl` (`--runlog FILE|none`); the dashboard polls that file every 2s.
+
+![dashboard](docs/dashboard.png)
 
 ## Store layout
 
@@ -86,35 +106,29 @@ strategy vs a from-scratch reimplementation of the spec on generated data; block
 
 ## Benchmarks
 
-Apple M-series laptop, 12 cores, 16 GB RAM, internal SSD, full quarter (2,884,406,697 points, raw 46.1 GB).
-**Cold cache** = `bench/evict.sh`, which needs `sudo` for `purge`; without it (as here) it streams ~30 GB of
-unrelated files through the page cache to push everything else out. This is a weaker guarantee than `purge`; run
-`sudo -v` first if you want the real thing. Inputs: `bench/make_inputs.py` (1M positions, 10k timestamps).
+Apple M-series laptop, 12 cores, internal SSD, full quarter (2,884,406,697 points, raw ~43 GiB / 46.1 GB).
+Inputs: `bench/make_inputs.py` (1M positions, 10k timestamps).
 
 | | result |
 |---|---|
-| Ingest (cold, 12 threads, stride 256) | 74 s, store 46.43 GB = **16.10 B/point** (raw is 16; index and 64 KiB padding are the extra) |
-| Ingest at stride 1000 | 71 s, 16.05 B/point |
-| 1M positions, block-index MAE, cold | 20.5 s (18.8% unresolved: entry/exit in the same gap or beyond the data) |
-| 1M positions, block-index MAE, warm | 20.1 s |
-| 1M positions, plain scan MAE (baseline), cold | 119.8 s, identical output |
-| 1M positions at stride 1000, cold | 30.9 s, identical output |
-| 10,000 snapshots, cold | median **8.4 ms**, p99 **50 ms**, max 210 ms |
-| 10,000 snapshots, second run | median 9.4 ms, p99 45 ms |
-| 10,000 snapshots at stride 1000, cold | median 8.7 ms, p99 57 ms |
-| Strategy W=1800 entry=2 exit=0 hold=3600, cold | 14.3 s, 1.80M trades, **28 MiB** peak RSS |
-| Strategy W=600 entry=1.5 exit=0.5 hold=1800 | 15.0 s, 5.92M trades, 30 MiB |
-| Strategy W=300 entry=3 exit=0 hold=7200 | 14.6 s, 3.72M trades, 29 MiB |
-
-Stride 256 is the default: it is faster for positions (smaller ragged block ends) and no worse for snapshots.
+| Generate full quarter (2,000 instruments) | 234.5 s |
+| Ingest, 1 thread | 156.8 s |
+| Ingest, 12 threads, stride 256 | 73.8 s, store 46.43 GB = **16.10 B/point** (raw is 16; index and 64 KiB padding are the extra) |
+| 1M positions, block-index MAE, 12 threads | 22.0 s, 4.58 GiB peak RSS (18.8% unresolved: entry/exit in a gap or beyond the data) |
+| 10k positions, plain scan MAE (baseline), 1 thread | 5.01 s, 1.28 GiB peak |
+| 10k positions, block-index MAE, 1 thread | 0.45 s, 364 MiB peak — identical output, ~11x faster than scan at this scale |
+| 10,000 snapshots, 12 threads, warm index | median **8.71 ms**, p99 **38.97 ms**, max 233 ms, 4.64 GiB peak |
+| 100 snapshots, 1 thread, cold index | median 160.9 ms, p99 257.9 ms |
+| 100 snapshots, 1 thread, warm index | median 2.03 ms, p99 3.37 ms — warming the index removes most of the cold-start cost at this scale |
+| Strategy W=1800 entry=2 exit=0 hold=3600, 12 threads | 14.62 s, 1,797,162 trades, **26 MiB** peak RSS |
 
 Strategy, W=1800 entry=2 exit=0 hold=3600 (Sharpe): US reverters 36.1, other 1.8; Europe 28.4 / -0.7; Japan 18.8 / -4.1.
 Reverters are clearly positive and the rest is noise (about +/-2 standard error over ~60 days), as the assignment predicts.
 
 **Where the snapshot p99 comes from.** A snapshot is 2,000 independent lookups, each a random ~16 KB page of a 46 GB file.
-One thread costs ~35 us per lookup (SSD latency); 12 threads reach ~200 lookups/ms, about 3 GB/s, which is the
-disk's sequential bandwidth. So the snapshot is disk-bandwidth bound (32 MB of pages per snapshot), it does not get faster on
-a second run (10,000 snapshots touch far more than RAM), and the tail is queueing on the SSD. More threads make p99 worse
-(48 threads: p99 76 ms). Getting it down needs fewer bytes per snapshot, i.e. a time-major layout, not a faster lookup.
+On a cold index, a single thread costs tens of us per lookup just on index page faults (100-snapshot, 1-thread, cold-index
+median above); 12 threads pushing 10,000 snapshots reach ~8.7 ms median but a p99 near 39 ms, because that tail is queueing
+on the SSD, not the search. It does not get much faster on a second run either (10,000 snapshots touch far more data than
+fits in RAM). Getting the tail down needs fewer bytes read per snapshot, i.e. a time-major layout, not a faster lookup.
 
-Peak RSS for `snapshot` and `trades` (4-6 GB) is mostly mapped file pages that the kernel can drop; `strategy` uses `pread` and stays near 30 MB.
+Peak RSS for `snapshot` and `trades` (1-5 GB) is mostly mapped file pages that the kernel can drop; `strategy` uses `pread` and stays near 30 MB.
