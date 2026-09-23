@@ -10,6 +10,12 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Default `make install` to ./bin instead of /usr/local, unless the caller passed
+# -DCMAKE_INSTALL_PREFIX explicitly.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR} CACHE PATH "Install prefix" FORCE)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -66,3 +72,6 @@ target_compile_definitions(test_generator PRIVATE
   CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/region.yaml"
   TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/test_tmp")
 add_test(NAME generator COMMAND test_generator)
+
+install(TARGETS gen ingest sim test_ingest test_sim test_generator
+        RUNTIME DESTINATION bin)
