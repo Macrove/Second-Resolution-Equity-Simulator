@@ -24,7 +24,7 @@ struct TradeIn {
     std::string_view id;  // text of trade_id, points into the input buffer
     int64_t instrument = 0;
     int side = 0;
-    double quantity = 0;
+    int64_t quantity = 0;
     int64_t entryNs = 0;
     int64_t exitNs = 0;
 };

@@ -64,7 +64,7 @@ static void testTradesHand(const fs::path& tmp) {
     ingest(raw, store, 3);  // small stride so blocks are used by the MAE lookup
 
     const int64_t fri = kFri, mon = kMon;
-    auto T = [](int64_t inst, int side, double qty, int64_t entry, int64_t exit) {
+    auto T = [](int64_t inst, int side, int64_t qty, int64_t entry, int64_t exit) {
         TradeIn t;
         t.instrument = inst; t.side = side; t.quantity = qty; t.entryNs = entry; t.exitNs = exit;
         return t;
@@ -110,7 +110,7 @@ static void testTradesHand(const fs::path& tmp) {
     int n = 0;
     for (const TradeCase& c : cases)
         csv += "t" + std::to_string(n++) + "," + std::to_string(c.in.instrument) + "," + std::to_string(c.in.side) + "," +
-               std::to_string(static_cast<int>(c.in.quantity)) + "," + std::to_string(c.in.entryNs) + "," +
+               std::to_string(c.in.quantity) + "," + std::to_string(c.in.entryNs) + "," +
                std::to_string(c.in.exitNs) + "\n";
     writeBytes(tmp / "trades_in.csv", csv.data(), csv.size());
     for (const char* mae : {"blocks", "scan"}) {

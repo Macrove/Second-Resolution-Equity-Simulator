@@ -82,8 +82,7 @@ std::vector<TradeIn> parseTrades(const std::string& text) {
         t.id = f[0];
         t.instrument = parseField<int64_t>(f[1], line);
         t.side = static_cast<int>(parseField<int64_t>(f[2], line));
-        // TODO:why is quantity double, it should be  int64_t, right?
-        t.quantity = parseField<double>(f[3], line);
+        t.quantity = parseField<int64_t>(f[3], line);
         t.entryNs = parseField<int64_t>(f[4], line);
         t.exitNs = parseField<int64_t>(f[5], line);
         trades.push_back(t);
